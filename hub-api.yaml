@@ -1,0 +1,2380 @@
+swagger: '2.0'
+info:
+  title: Hub HTTP API
+  description: Provides HTTP access to Edelia’s Hub
+  version: "1.15.x"
+  contact:
+    name: Edelia IoT Hub development team
+    url: http://www.edelia.fr
+    email: hub@edelia.fr
+host: api.edelia-hub.net
+schemes:
+ - https
+consumes:
+  - application/json
+produces:
+  - application/json
+tags : [
+  {  name : "GDPR"  },
+  {  name : "Administration and configuration"  },
+  {  name : "Current" },
+  {  name : "WebHook" },
+  {  name : "Capability : Energy" },
+  {  name : "Capability : Temperature" },
+  {  name : "Capability : Thermostat" },
+  {  name : "Capability : Humidity" },
+  {  name : "Capability : Noise" },
+  {  name : "Capability : CO2" },
+  {  name : "Token : Tenant or User" },
+  {  name : "Token : User only" },
+  {  name : "Token : Tenant only" },
+  {  name : "Deprecated" }
+]
+paths:
+  '/v1/applications/{application-id}/configuration':
+    get:
+      summary: Get the configuration of a tenant application
+      description: |
+        Returns Get the configuration of a tenant application
+      parameters:
+        - name: application-id
+          in: path
+          description: Tenant Application unique Id
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+      responses:
+        200:
+          description: A list of authorizations
+          schema:
+            $ref: '#/definitions/TenantApplicationConfiguration'
+        404:
+          description: Configuration unfound for this application-id
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+  '/v1/authorizations':
+    get:
+      summary: Get all the authorizations and revocations for the connected in tenant
+      description: |
+        Returns all authorizations and revocations for a tenant. The
+        response includes the list of all authorizations and revocations for the connected tenant.
+      parameters:
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant only"
+      responses:
+        200:
+          description: A list of authorizations
+          schema:
+            $ref: '#/definitions/AuthorizationsResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+    post:
+      summary: Publish authorization with device
+      parameters:
+        - name: requestBody
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/ProviderAuthorization"
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: Authorization and devices saved
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:authorization:publish
+  '/v1/users/{username}/devices':
+    get:
+      summary: Get all devices authorized for one user
+      description: |
+        Returns all devices informations authorized by a given user. The
+        response includes the list of all services available for a device.
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+        - name: device-data-type
+          in: query
+          description: Device data type of the device
+          required: false
+          type: string
+        - name: provider
+          in: query
+          description: Device provider
+          required: false
+          type: string
+        - name: enabled-only
+          in: query
+          description: Whether to return only ENABLED devices (defaults to `true`)
+          required: false
+          type: string
+        - name: status
+          in: query
+          description: if enabled-only is false, defined expected statuses. (By defaults this filter is inactif) 
+          required: false
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of devices
+          schema:
+            $ref: '#/definitions/DevicesResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: User not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/status':
+    post:
+      description:
+        Change status of device.
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      parameters:
+        - name: device-id
+          in: path
+          description: Device unique identifier
+          required: true
+          type: string
+        - name: requestBody
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/DeviceStatusRequest"
+      responses:
+        204:
+          description: Management of collectable devices ok
+        400:
+          description: Bad request
+          schema:
+            $ref: '#/definitions/Problem'  
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:tenant:all
+  '/v1/devices/{device-id}/energy-productions':
+    get:
+      summary: Get energy productions of a device during a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device unique identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Energy"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of energy production
+          schema:
+            $ref: '#/definitions/EnergyProductionResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/energy-consumptions':
+    get:
+      summary: Get energy consumptions of a device during a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device unique identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Energy"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of energy consumptions
+          schema:
+            $ref: '#/definitions/EnergyConsumptionsResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/users/{username}/providers':
+    get:
+      summary: List all available providers for one user
+      description: |
+        Return all providers available for a given user. The response includes
+        the authorization informations (url and status) for each provider.
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of providers
+          schema:
+            $ref: '#/definitions/ProvidersResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: User not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/users':
+    get:
+      summary: Get users who meet the search criteria
+      parameters:
+        - name: capability
+          in: query
+          description: Capability
+          required: false
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant only" 
+      responses:
+        200:
+          description: Users who meet the search criteria
+          schema:
+            $ref: '#/definitions/GetUsersResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/users/{username}':
+    delete:
+      summary: Delete user and all its authorizations, devices and data
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "GDPR"
+        - "Token : Tenant or User"
+      responses:
+        204:
+          description: User is deleted
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:delete
+  '/v1/users/{username}/exports/gdpr':
+    get:
+      summary: Get user authorizations, devices and data
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Administration and configuration" 
+        - "GDPR"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: Data export sucessful
+          schema:
+            $ref: '#/definitions/GdprExportResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/temperatures/current':
+    get:
+      description: Get the current temperature
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+      tags:
+        - "Capability : Temperature"
+        - "Current"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: The current temperature
+          schema:
+            $ref: '#/definitions/CurrentTemperatureResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/temperatures':
+    get:
+      description: A list of temperatures within a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Temperature"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of temperatures
+          schema:
+            $ref: '#/definitions/TemperaturesResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/single-zone-thermostat-settings/current':
+    get:
+      description: Get the current state of a thermostat
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+      tags:
+        - "Capability : Thermostat"
+        - "Current"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: The current settings of a thermostat
+          schema:
+            $ref: '#/definitions/CurrentThermostatSettingsResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/single-zone-thermostat-settings':
+    get:
+      description: A list of thermostat settings within a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Thermostat"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of thermostat settings
+          schema:
+            $ref: '#/definitions/ThermostatSettingsResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/single-zone-thermostat-schedules':
+    get:
+      description: A list of thermostat schedules within a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Thermostat"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of thermostat schedules
+          schema:
+            $ref: '#/definitions/ThermostatSchedulesResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/single-zone-thermostat-schedules/current':
+    get:
+      description: Get the current schedule of a thermostat
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+      tags:
+        - "Capability : Thermostat"
+        - "Current"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: The current schedule of a thermostat
+          schema:
+            $ref: '#/definitions/CurrentThermostatScheduleResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub:
+          - hub:all:read
+  '/v1/devices/{device-id}/thermostat-installations':
+    get:
+      description: A list of thermostat installations within a given period
+      parameters:
+        - name: device-id
+          in: path
+          description: Device identifier
+          required: true
+          type: string
+        - name: from
+          in: query
+          description: Period's begin (inclusive)
+          required: true
+          type: string
+          format: date-time
+        - name: to
+          in: query
+          description: Period's end (exclusive)
+          required: true
+          type: string
+          format: date-time
+      tags:
+        - "Capability : Thermostat"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: A list of thermostat installations
+          schema:
+            $ref: '#/definitions/ThermostatInstallationsResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/devices/{device-id}/humidities/current':
+    get:
+      description: Get the current humidity
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      tags:
+        - "Capability : Humidity"
+        - "Current"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: The current humidity
+          schema:
+            $ref: '#/definitions/CurrentHumidityResponse'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/humidities':
+    get:
+      description: A list of humidities within a given period
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      - name: from
+        in: query
+        description: Period's begin (inclusive)
+        required: true
+        type: string
+        format: date-time
+      - name: to
+        in: query
+        description: Period's end (exclusive)
+        required: true
+        type: string
+        format: date-time
+      tags:
+        - "Capability : Humidity"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: A list of humidities
+          schema:
+            $ref: '#/definitions/HumiditiesResponse'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/noises/current':
+    get:
+      description: Get the current noise
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      tags:
+        - "Capability : Noise"
+        - "Current"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: The current noise
+          schema:
+            $ref: '#/definitions/CurrentNoiseResponse'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/noises':
+    get:
+      description: A list of noises within a given period
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      - name: from
+        in: query
+        description: Period's begin (inclusive)
+        required: true
+        type: string
+        format: date-time
+      - name: to
+        in: query
+        description: Period's end (exclusive)
+        required: true
+        type: string
+        format: date-time
+      tags:
+        - "Capability : Noise"
+        - "Current"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: A list of noises
+          schema:
+            $ref: '#/definitions/NoisesResponse'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/co2/current':
+    get:
+      description: Get the current co2
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      tags:
+        - "Capability : CO2"
+        - "Current"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: The current co2
+          schema:
+            $ref: '#/definitions/CurrentCO2Response'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/co2':
+    get:
+      description: A list of co2 levels within a given period
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      - name: from
+        in: query
+        description: Period's begin (inclusive)
+        required: true
+        type: string
+        format: date-time
+      - name: to
+        in: query
+        description: Period's end (exclusive)
+        required: true
+        type: string
+        format: date-time
+      tags:
+        - "Capability : CO2"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: A list of co2 levels
+          schema:
+            $ref: '#/definitions/CO2Response'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/devices/{device-id}/energy-usage-indexes':
+    get:
+      description: A list of energy indexes by usage within a given period
+      security:
+      - edelia/hub:
+        - hub:all:read
+      parameters:
+      - name: Authorization
+        in: header
+        type: string
+        description: 'Use by security to transmit the token.(ex: Bearer ${ACCESS_TOKEN}).'
+      - name: device-id
+        in: path
+        required: true
+        type: string
+        description: Device identifier.
+      - name: from
+        in: query
+        description: Period's begin (inclusive)
+        required: true
+        type: string
+        format: date-time
+      - name: to
+        in: query
+        description: Period's end (exclusive)
+        required: true
+        type: string
+        format: date-time
+      tags:
+        - "Capability : Energy"
+        - "Deprecated"
+        - "Token : Tenant or User"
+      responses:
+        '200':
+          description: A list of energy indexes by usage
+          schema:
+            $ref: '#/definitions/EnergyUsageIndexResponse'
+        '400':
+          description: Functional Error
+          schema:
+            $ref: "#/definitions/Problem"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '500':
+          description: Server-side error
+  '/v1/users/{username}/providers/{providerId}/revoke':
+    post:
+      description: Post to revoke authorization
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+        - name: providerId
+          in: path
+          description: Provider id identifying the provider
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        204:
+          description: Authorization revoked
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Authorization not exist
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:delete
+  '/v1/devices/{device-id}':
+    get:
+      summary: Get user and device information
+      parameters:
+        - name: device-id
+          in: path
+          description: Device unique identifier
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: User and device information
+          schema:
+            $ref: '#/definitions/UserDeviceResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Device not found
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/registrations':
+    post:
+      description:
+        Registers user, provider and device information.
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant only"
+      parameters:
+        - name: requestBody
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/RegistrationRequest"
+      responses:
+        200:
+          description: Registration went ok
+          schema:
+            $ref: '#/definitions/RegistrationResponse'
+        400:
+          description: Provider id was not found or the provider subsystem does not implement registrations
+          schema:
+            $ref: '#/definitions/Problem'  
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:registrations:perform
+  '/v1/users/devices':
+    get:
+      summary: Get all devices authorized for one user
+      description: |
+        Returns all devices informations authorized by a given user. The
+        response includes the list of all services available for a device.
+      parameters:
+        - name: device-data-type
+          in: query
+          description: Device data type of the device
+          required: false
+          type: string
+        - name: provider
+          in: query
+          description: Device provider
+          required: false
+          type: string
+        - name: enabled-only
+          in: query
+          description: Whether to return only ENABLED devices (defaults to `true`)
+          required: false
+          type: string
+        - name: status
+          in: query
+          description: if enabled-only is false, defined expected statuses. (By defaults this filter is inactif) 
+          required: false
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      responses:
+        200:
+          description: A list of devices
+          schema:
+            $ref: '#/definitions/DevicesResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/users/providers':
+    get:
+      summary: List all available providers for one user
+      description: |
+        Return all providers available for a given user. The response includes
+        the authorization informations (url and status) for each provider.
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      responses:
+        200:
+          description: A list of providers
+          schema:
+            $ref: '#/definitions/ProvidersResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/catalog':
+    get:
+      summary: List all catalog device models
+      description: |
+        Return all catalog device models that a user has access to through his tenant.
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      responses:
+        200:
+          description: A list of catalog device models
+          schema:
+            $ref: '#/definitions/TenantCatalog'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/device-model/{deviceModelId}':
+    get:
+      summary: Get a device model specifics
+      description: |
+        Return a device model specifics
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      parameters:
+        - name: deviceModelId
+          in: path
+          description: Device model unique identifier
+          required: true
+          type: string
+      responses:
+        200:
+          description: A device model
+          schema:
+            $ref: '#/definitions/DeviceModel'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub:
+          - hub:all:read
+  '/v1/device-model/{device-model-id}/features':
+    get:
+      summary: Get a device model features
+      description: |
+        Return a device model features
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      parameters:
+        - name: device-model-id
+          in: path
+          description: Device model unique identifier
+          required: true
+          type: string
+      responses:
+        200:
+          description: A device model feature
+          schema:
+            $ref: '#/definitions/TenantFeatureResponse'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub:
+          - hub:all:read
+  '/v1/polls/configuration':
+    get:
+      summary: provide the information necessary to propose the poll of missing connected objects.
+      description: |
+        Returns the information necessary to propose the poll of missing connected objects.
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        200:
+          description: Poll configuration
+          schema:
+            $ref: '#/definitions/PollConfiguration'
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:read
+  '/v1/users/polls':
+    post:
+      description:
+        Registers poll
+      tags:
+        - "Administration and configuration"
+        - "Token : User only"
+      parameters:
+        - name: requestBody
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/Poll"
+      responses:
+        204:
+          description: Registration of poll went ok
+        400:
+          description: Bad request
+          schema:
+            $ref: '#/definitions/Problem'  
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:tenant:all
+  '/v1/users/{username}/authorizations/B2C/revoke':
+    post:
+      description: Post to revoke B2C authorizations
+      parameters:
+        - name: username
+          in: path
+          description: Username identifying the user
+          required: true
+          type: string
+      tags:
+        - "Administration and configuration"
+        - "Token : Tenant or User"
+      responses:
+        204:
+          description: Authorization revoked
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Authorization not exist
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:delete
+  '/v1/users/authorizations/B2C/revoke':
+    post:
+      description: Post to revoke B2C authorizations
+      tags:
+        - "Administration and configuration"
+        - "Token : User Only"
+      responses:
+        204:
+          description: Authorization revoked
+        401:
+          description: User is not authenticated
+          schema:
+            $ref: '#/definitions/Problem'
+        403:
+          description: User does not have access to this API
+          schema:
+            $ref: '#/definitions/Problem'
+        404:
+          description: Authorization not exist
+          schema:
+            $ref: '#/definitions/Problem'
+        500:
+          description: Server side error
+          schema:
+            $ref: '#/definitions/Problem'
+      security:
+        - edelia/hub: 
+          - hub:all:delete
+definitions:
+  Poll:
+    properties:
+      brand:
+        type: string
+      deviceType:
+        type: string
+      freeBrand:
+        type: string
+      freeDeviceType:
+        type: string
+  PollConfiguration:
+    properties:
+      brands:
+        type: array
+        items:
+          type: string
+      deviceTypes:
+        type: array
+        items:
+          type: string
+  DeviceStatusRequest:
+    required:
+      - status
+    properties:
+      status:
+        type: string
+        enum:
+          - ENABLED
+          - EXCLUDED
+
+  AuthorizationsResponse:
+    properties:
+      authorizations:
+        type: array
+        items:
+          $ref: '#/definitions/Authorization'
+  Authorization:
+    required:
+      - id
+      - user
+      - provider
+      - creationDate
+      - type
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+      user:
+        $ref: '#/definitions/User'
+      provider:
+        $ref: '#/definitions/AuthorizationProvider'
+      creationDate:
+        $ref: '#/definitions/DateTime'
+      type:
+        type: string
+      revocationDate:
+        $ref: '#/definitions/DateTime'
+      reason:
+        type: string
+        description: Reason of the revocation
+  RegistrationResponse:
+    required:
+      - authorizations
+    properties:
+      authorizations:
+        type: array
+        items:
+          $ref: '#/definitions/ProviderAuthorization'
+  GetUsersResponse:
+    required:
+      - users
+    properties:
+      users:
+        type: array
+        items:
+          $ref: '#/definitions/GetUser'
+  GetUser:
+    properties:
+      username:
+        type: string
+        description: Unique identifier for a tenant
+  User:
+    required:
+      - id
+      - username
+      - tenantId
+    properties:
+      id:
+        type: string
+        description: Unique identifier (=username)
+      username:
+        type: string
+        description: Unique identifier (=id)
+      tenantId:
+        type: string
+        description: Unique identifier of tenant
+  ProviderAuthorization:
+    required:
+      - authorization
+      - devices
+    properties:
+      authorization:
+        $ref: '#/definitions/Authorization'
+      devices:
+        type: array
+        items:
+          $ref: '#/definitions/ProviderDevice'
+  ProviderDevice:
+    required:
+      - id
+      - modelId
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      modelId:
+        type: string
+      area:
+        $ref: '#/definitions/Area'
+      status:
+        type: string
+      lastStatusUpdate:
+        $ref: '#/definitions/DateTime'
+      labels:
+        type: object
+        additionalProperties:
+          type: string
+
+  AuthorizationProvider:
+    required:
+      - id
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+  DevicesResponse:
+    properties:
+      devices:
+        type: array
+        items:
+          $ref: '#/definitions/Device'
+  Area:
+    required:
+      - type
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+      name:
+        type: string
+        description: User friendy name
+      type:
+        type: string
+        description: Type of area (of Hub)
+      providerType:
+        type: string
+        description: Type of area (of the provider)
+  Device:
+    required:
+      - id
+      - model
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+      name:
+        type: string
+        description: User friendy name
+      area:
+        $ref: '#/definitions/Area'
+      model:
+        $ref: '#/definitions/DeviceModel'
+      status:
+        type: string
+      lastStatusUpdate:
+        $ref: '#/definitions/DateTime'
+      labels:
+        type: object
+        additionalProperties:
+          type: string
+  DeviceModel:
+    required:
+      - id
+      - providerId
+      - types
+      - brand
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+      name:
+        type: string
+        description: User friendly name
+      providerId:
+        type: string
+        enum:
+          - COMWATT
+        description: Provider's unique identifier
+      types:
+        type: array
+        items:
+          $ref: '#/definitions/DeviceModelType'
+        description: An array of types supported
+      capabilities:
+        type: array
+        items:
+          $ref: '#/definitions/Capability'
+        description: An array of data that can be retrieved on this model
+      brand:
+        type: string
+      category:
+        type: string
+  DeviceModelType:
+    type: string
+    enum:
+      - ELECTRICITY_GENERATOR
+      - SOLAR_PANEL
+      - ELECTRICITY_METER
+      - TOTAL_ELECTRICITY_METER
+      - OUTLET
+  Capability:
+    required:
+      - name
+    properties:
+      name:
+        type: string
+        enum:
+          - ELECTRICITY_PRODUCTION
+          - ELECTRICITY_CONSUMPTION
+      data:
+        type: array
+        items:
+          type: object # TODO
+  EnergyProductionResponse:
+    required:
+      - units
+      - production
+    properties:
+      units:
+        $ref: '#/definitions/EnergyUnits'
+      production:
+        type: array
+        items:
+          $ref: '#/definitions/EnergyProduction'
+  EnergyConsumptionsResponse:
+    required:
+      - units
+      - consumptions
+    properties:
+      units:
+        $ref: '#/definitions/EnergyUnits'
+      consumptions:
+        type: array
+        items:
+          $ref: '#/definitions/EnergyConsumption'
+  EnergyConsumption:
+    required:
+      - period
+      - energy
+    properties:
+      period:
+        $ref: '#/definitions/DateTimePeriod'
+      energy:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  EnergyProduction:
+    required:
+      - period
+      - energy
+    properties:
+      period:
+        $ref: '#/definitions/DateTimePeriod'
+      energy:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  EnergyUnits:
+    required:
+      - energy
+    properties:
+      energy:
+        type: string
+        enum:
+          - Wh
+  DateTimePeriod:
+    required:
+      - from
+      - to
+    properties:
+      from:
+        $ref: '#/definitions/DateTime'
+      to:
+        $ref: '#/definitions/DateTime'
+  DateTime:
+    type: string
+    format: date-time
+  ProvidersResponse:
+    required:
+      - providers
+    properties:
+      providers:
+        type: array
+        items:
+          $ref: '#/definitions/ProviderUserStatus'
+  ProviderUserStatus:
+    required:
+      - provider
+      - authorized
+    properties:
+      provider:
+        $ref: '#/definitions/Provider'
+      authorized:
+        type: boolean
+        description: true if the provider has been authorized by the user
+  Provider:
+    required:
+      - id
+      - authorizationUrl
+    properties:
+      id:
+        type: string
+        description: Unique identifier
+      name:
+        type: string
+        description: User friendly name
+      authorizationUrl:
+        type: string
+        description: URL for authorization using OAuth
+  Problem:
+    description: See [RFC-7807](https://tools.ietf.org/html/rfc7807)
+    properties:
+      status:
+        type: number
+        description: The HTTP status code generated by the origin server for this occurrence of the problem.
+      title:
+        type: string
+        description: A short, human-readable summary of the problem type.
+      detail:
+        type: string
+        description: A human-readable explanation specific to this occurrence of the problem.
+      type:
+        type: string
+        description:  A URI reference that identifies the problem type.
+  GdprExportResponse:
+    properties:
+      devices:
+        type: array
+        items:
+          $ref: '#/definitions/GdprDevice'
+      consents:
+        type: array
+        items:
+          $ref: '#/definitions/Consent'
+      revocations:
+        type: array
+        items:
+          $ref: '#/definitions/Revocation'
+      polls:
+        type: array
+        items:
+          $ref: '#/definitions/Poll'
+  GdprDevice:
+    required:
+      - name
+      - provider
+      - deviceType
+      - modelId
+    properties:
+      name:
+        type: string
+      provider:
+        type: string
+      deviceType:
+        type: array
+        items: 
+          type: string
+      capabilities:
+        type: object
+        additionalProperties:
+          type: object
+      area:
+        $ref: '#/definitions/Area'
+      status:
+        type: string
+      modelId:
+        type: string
+      labels:
+        type: object
+        additionalProperties:
+          type: string
+  Consent:
+    required:
+      - provider
+      - timestamp
+    properties:
+      provider: 
+        type: string
+      timestamp: 
+        $ref: '#/definitions/DateTime'
+  Revocation:
+    required:
+      - provider
+      - consentTimestamp
+      - revocationTimestamp
+    properties:
+      provider: 
+        type: string
+      reason: 
+        type: string
+      consentTimestamp: 
+        $ref: '#/definitions/DateTime'
+      revocationTimestamp: 
+        $ref: '#/definitions/DateTime'
+  CurrentTemperatureResponse:
+    required:
+      - temperature
+      - units
+    properties:
+      temperature:
+        $ref: '#/definitions/Temperature'
+      units:
+        $ref: '#/definitions/TemperatureUnits'
+  Temperature:
+    required:
+      - timestamp
+      - temperature
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      temperature:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  TemperatureUnits:
+    properties:
+      temperature:
+        type: string
+        enum:
+          - CELSIUS
+  ThermostatSettingsUnits:
+    properties:
+      setpoint:
+        type: string
+        enum:
+          - CELSIUS
+  ThermostatScheduleUnits:
+    properties:
+      setpoint:
+        type: string
+        enum:
+          - CELSIUS
+  TemperaturesResponse:
+    required:
+      - temperatures
+      - units
+    properties:
+      temperatures:
+        type: array
+        items:
+          $ref: '#/definitions/Temperature'
+      units:
+        $ref: '#/definitions/TemperatureUnits'
+  CurrentThermostatSettingsResponse:
+    required:
+      - settings
+      - units
+    properties:
+      settings:
+        $ref: '#/definitions/ThermostatSettings'
+      units:
+        $ref: '#/definitions/ThermostatSettingsUnits'
+  ThermostatSettings:
+    required:
+      - timestamp
+      - setpoint
+      - power
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      setpoint:
+        type: number
+        format: double
+      power:
+        type: string
+        enum:
+          - ON
+          - OFF
+      mode:
+        type: string
+        enum:
+          - SCHEDULE
+          - MANUAL
+          - SMART
+      intensity:
+        type: string
+        enum:
+          - BOOST
+          - ECO
+          - FROST_GUARD
+          - NORMAL
+      hvacMode:
+        type: string
+        enum:
+          - HEAT
+          - COOL
+          - AUTO
+      expiry:
+        $ref: '#/definitions/DateTime'
+  ThermostatSettingsResponse:
+    required:
+      - settings
+      - units
+    properties:
+      settings:
+        type: array
+        items:
+          $ref: '#/definitions/ThermostatSettings'
+      units:
+        $ref: '#/definitions/ThermostatSettingsUnits'
+  ThermostatSchedulesResponse:
+    required:
+      - schedules
+      - units
+    properties:
+      schedules:
+        type: array
+        items:
+          $ref: '#/definitions/ThermostatSchedule'
+      units:
+        $ref: '#/definitions/ThermostatScheduleUnits'
+  CurrentThermostatScheduleResponse:
+    required:
+      - schedule
+      - units
+    properties:
+      schedule:
+        $ref: '#/definitions/ThermostatSchedule'
+      units:
+        $ref: '#/definitions/ThermostatScheduleUnits'
+  ThermostatSchedule:
+    required:
+      - days
+      - timestamp
+    properties:
+      days:
+        type: array
+        items:
+          $ref: '#/definitions/ThermostatScheduleDay'
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      expiry:
+        $ref: '#/definitions/DateTime'
+  ThermostatScheduleDay:
+    required:
+      - periods
+      - day
+    properties:
+      periods:
+        type: array
+        items:
+          $ref: '#/definitions/ThermostatSchedulePeriod'
+      day:
+        type: string        
+        enum:
+          - MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY
+  ThermostatSchedulePeriod:
+    required:
+      - period
+      - setpoint
+    properties:
+      period:
+        $ref: '#/definitions/LocalTimePeriod'
+      setpoint:
+        type: number
+        format: double
+      setpointLabel:
+        type: string
+  ThermostatInstallationsResponse:
+    required:
+      - installations
+    properties:
+      installations:
+        type: array
+        items:
+          $ref: '#/definitions/ThermostatInstallation'
+  ThermostatInstallation:
+    required:
+      - timestamp
+      - heaters
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      expiry:
+        $ref: '#/definitions/DateTime'
+      heaters:
+        type: number
+        format: integer
+  LocalTimePeriod:
+    required:
+      - from
+    properties:
+      from:
+        type: string
+        format: local-time
+      to:
+        type: string
+        format: local-time
+  UserDeviceResponse:
+    required:
+      - tenantId
+      - device
+    properties:
+      username:
+        type: string
+      tenantId:
+        type: string
+      device:
+        $ref: '#/definitions/Device'
+
+  CurrentHumidityResponse:
+    required:
+    - humididy
+    - units
+    properties:
+      humididy:
+        $ref: '#/definitions/Humidity'
+      units:
+        $ref: '#/definitions/HumidityUnits'
+  HumiditiesResponse:
+    required:
+    - humidities
+    - units
+    properties:
+      humidities:
+        type: array
+        items:
+          $ref: '#/definitions/Humidity'
+      units:
+        $ref: '#/definitions/HumidityUnits'
+  Humidity:
+    required:
+    - timestamp
+    - humidity
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      humidity:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  HumidityUnits:
+    properties:
+      humididy:
+        type: string
+  NoisesResponse:
+    required:
+    - noises
+    - units
+    properties:
+      noises:
+        type: array
+        items:
+          $ref: '#/definitions/Noise'
+      units:
+        $ref: '#/definitions/NoiseUnits'
+  CurrentNoiseResponse:
+    required:
+    - noise
+    - units
+    properties:
+      noise:
+        $ref: '#/definitions/Noise'
+      units:
+        $ref: '#/definitions/NoiseUnits'
+  Noise:
+    required:
+    - timestamp
+    - noise
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      noise:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  NoiseUnits:
+    properties:
+      noise:
+        type: string
+
+  EnergyUsageIndexResponse:
+    required:
+    - indexes
+    - units
+    properties:
+      humidities:
+        type: array
+        items:
+          $ref: '#/definitions/EnergyUsageIndex'
+      units:
+        $ref: '#/definitions/EnergyUnits'
+  EnergyUsageIndex:
+    required:
+    - timestamp
+    - index
+    - usage
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      humididy:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+      usage:
+        type: string
+
+  CO2Response:
+    required:
+    - co2s
+    - units
+    properties:
+      co2s:
+        type: array
+        items:
+          $ref: '#/definitions/CO2'
+      units:
+        $ref: '#/definitions/CO2Units'
+  CurrentCO2Response:
+    required:
+    - co2
+    - units
+    properties:
+      co2:
+        $ref: '#/definitions/CO2'
+      units:
+        $ref: '#/definitions/CO2Units'
+  CO2:
+    required:
+    - timestamp
+    - co2
+    properties:
+      timestamp:
+        $ref: '#/definitions/DateTime'
+      co2:
+        type: number
+        format: double
+      expiry:
+        $ref: '#/definitions/DateTime'
+  CO2Units:
+    properties:
+      co2:
+        type: string
+  RegistrationRequest:
+    properties:
+      registrations:
+        type: array
+        items:
+          $ref: '#/definitions/Registration'
+  Registration:
+    required:
+    - providerId
+    properties:
+      username:
+        type: string
+      providerId:
+        type: string
+      providerKeys:
+        type: object
+        additionalProperties:
+          type: string
+      deviceModelId:
+        type: string
+      labels:
+        type: object
+        additionalProperties:
+          type: string
+  TenantCatalog:
+    required:
+    - iotTypes
+    properties:
+      catalogDeviceModels:
+        type: array
+        items:
+          $ref: '#/definitions/CatalogDeviceModel'
+  CatalogDeviceModel:
+    required:
+    - deviceModelId
+    - provider
+    - brand
+    - connectedDevices
+    properties:
+      deviceModelId:
+        type: string
+      category:
+        type: string
+        enum:
+          - RADIATOR, THERMOSTAT, AUTO_CONSO_BOX, WEATHER_STATION
+      brand:
+        type: string
+      provider:
+        type: string
+      connectedDevices:
+        type: number
+        format: integer
+  TenantFeatureResponse:
+    required:
+    - tenantFeatures
+    properties:
+      tenantFeatures:
+        type: array
+        items:
+          $ref: '#/definitions/TenantFeature'
+  TenantFeature:
+    required:
+    - code
+    - tenantApplications
+    properties:
+      code:
+        type: string
+      tenantApplications:
+        type: array
+        items:
+          $ref: '#/definitions/TenantApplication'
+  TenantApplication:
+    required:
+    - code
+    properties:
+      code:
+        type: string
+  TenantApplicationConfiguration:
+    required:
+    - clientId
+    - assetsFolder
+    - language
+    properties:
+      clientId:
+        type: string
+      assetsFolder:
+        type: string
+      language:
+        type: string
+      enabledFeatures:
+        type: array
+        items:
+          type: string
+
+securityDefinitions:
+  edelia/hub:
+    type: oauth2
+    description: "OAuth 2.0 authentication. The access token must be provided using an `Authorization: Bearer ${ACCESS_TOKEN}` request header.\n"
+    flow: password
+    scopes:
+      hub:all:read: Grants read access
+      hub:all:delete: Grants delete access
+      hub:tenant:all: Grants for access to resource for tenant
+      hub:authorization:publish: Grants access to perform authorizations 
+      hub:registrations:perform: Grants access to perform registrations
+    tokenUrl: http://auth.edelia-hub.net/oauth/token/oauth/token

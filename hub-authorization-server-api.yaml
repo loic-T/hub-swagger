@@ -1,0 +1,163 @@
+swagger: '2.0'
+info:
+  title: Hub OAuth 2.0 Authorization Server
+  description: Hub Authorization Server
+  version: "0.4.x"
+  contact:
+    name: Edelia IoT Hub development team
+    url: http://www.edelia.fr
+    email: hub@edelia.fr
+host: auth.edelia-hub.net
+schemes:
+ - https
+consumes:
+  - application/x-www-form-urlencoded
+produces:
+  - application/json
+paths:
+  "/oauth/token":
+    post:
+      consumes:
+        - application/x-www-form-urlencoded
+      tags:
+        - oauth
+      description: |
+          See OAuth 2.0 [Client Credentials](https://tools.ietf.org/html/rfc6749#section-4.4) and [JWT Bearer](https://tools.ietf.org/html/rfc7523) Grant specifications.
+          The endpoint is secured with HTTP Basic Authentication,
+          using `client_id:client_secret` as credentials.
+      operationId: postOAuthToken
+      parameters:
+        - name: grant_type
+          in: formData
+          description: "Grant Type"
+          required: true
+          type: string
+          enum:
+            - "client_credentials"
+            - "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        - name: assertion
+          in: formData
+          description: |
+            **For [jwt-bearer](https://tools.ietf.org/html/rfc7523) grant type only**
+            JWT Bearer Token to exchange for an access token
+          required: true
+          type: string
+      responses:
+        200:
+          description: "Token info"
+          schema:
+            $ref: '#/definitions/TokenResponse'
+        400:
+          description: "Invalid input"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        401:
+          description: "Bad Client credentials"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        500:
+          description: "Unexpected error"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+      security:
+        - basicAuth: []
+
+  "/oauth/check_token":
+    post:
+      consumes:
+        - application/x-www-form-urlencoded
+      tags:
+        - oauth
+      description: |
+          Check if a token is valid, and retrieve auth info.
+          The endpoint is secured with HTTP Basic Authentication,
+          using `client_id:client_secret` as credentials.
+      operationId: checkToken
+      parameters:
+        - name: token
+          in: formData
+          description: "Token to check"
+          required: true
+          type: string
+      responses:
+        200:
+          description: "Token info"
+          schema:
+            $ref: '#/definitions/CheckTokenResponse'
+        400:
+          description: "Invalid token"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        401:
+          description: "Bad Client credentials"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        403:
+          description: "Client not allowed to verify tokens"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        500:
+          description: "Unexpected error"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+      security:
+        - basicAuth: []
+
+definitions:
+  ErrorResponse:
+    required:
+      - errorCode
+      - error_description
+    properties:
+      error:
+        type: string
+      error_description:
+        type: string
+  TokenResponse:
+    description: "an access token"
+    properties:
+      access_token:
+        description: "generated token"
+        type: string
+      token_type:
+        description: "token type"
+        type: string
+      expires_in:
+        description: "expiration time in seconds"
+        type: string
+      scope:
+        description: "granted scopes"
+        type: string
+      name:
+        description: "associated app name"
+        type: string
+  CheckTokenResponse:
+    properties:
+      exp:
+        description: Expiry timestamp (epoch seconds)
+        type: integer
+      scope:
+        description: Scopes linked to the token
+        type: array
+        items:
+          type: string
+      grant_type:
+        description: OAuth 2.0 grant type used to obtain the token
+        type: string
+      client_id:
+        description: The Client application that obtained the token
+        type: string
+      active:
+        description: Always `true` when the token is valid
+        type: boolean
+      tenant_id:
+        description: "Tenant ID linked to the Client that obtained the token"
+        type: string
+      offer_family:
+        description: "Legacy. Use `tenant_id` instead"
+        type: string
+
+securityDefinitions:
+  basicAuth:
+    # Using `client_id:client_secret` as credentials
+    type: basic
